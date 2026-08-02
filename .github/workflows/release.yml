@@ -221,6 +221,7 @@ jobs:
             printf 'Profile: ci-core-1 Developer Preview\n'
             printf 'Independent audit: not completed\n'
             printf 'Independent implementation interoperability: not completed\n'
+            printf 'Accepted source-graph advisory: GHSA-wrw7-89jp-8q8g; Linux-only Tauri/GTK transitive, no Linux artifact distributed\n'
           } > release/RELEASE-EVIDENCE.txt
 
       - name: Prepare honest release notes
@@ -234,6 +235,8 @@ jobs:
             printf 'The browser artifact contains fictional in-memory data only. It does not create keys, issue credentials, persist a vault, or provide a signed/notarized macOS application.\n\n'
             # shellcheck disable=SC2016
             printf 'Profile boundary: VCDM 2.0 `application/vc` / `application/vp`, `eddsa-jcs-2022`, CI-Core community linkability only. BBS, selective disclosure, verifier-domain pseudonyms, Guardian Recovery conformance, and production interoperability are excluded.\n\n'
+            # shellcheck disable=SC2016
+            printf 'Native distribution is excluded. The Linux-only Tauri/GTK source graph contains accepted advisory `GHSA-wrw7-89jp-8q8g`; no Linux artifact is built or published, and both supported macOS target graphs pass the advisory gate. See [`SECURITY.md`](https://github.com/%s/blob/%s/SECURITY.md).\n\n' "${GITHUB_REPOSITORY}" "${SOURCE_COMMIT}"
             printf 'The release workflow reran format, lint, typecheck, test, and release build gates. Checksums and build evidence are attached. To roll back, stop using this prerelease and return to the prior tag; published bytes are never replaced.\n'
           } > release/RELEASE-NOTES.md
 
