@@ -30,7 +30,7 @@ Release owner/reviewer/security reviewer:
 Publication approval:
 ```
 
-Never reuse a version or tag. Do not change the meaning of `commons-identity/1`, `ci-core-1`, a Context URL, or an archive format silently.
+Never reuse a version or move a version tag. GitHub Immutable Releases must remain enabled, and the active `Immutable version tags` ruleset must reject update and deletion of `refs/tags/v*` without bypass actors. Because the standard Actions token cannot read either administrative field, the release owner must verify both in repository settings or with an administrator API token before dispatch and enter the required `PUBLICATION CONTROLS VERIFIED` confirmation. Do not store that administrator credential in Actions. Do not change the meaning of `commons-identity/1`, `ci-core-1`, a Context URL, or an archive format silently.
 
 ## 2. Freeze and inspect
 
@@ -117,11 +117,13 @@ Avoid “secure,” “production-ready,” “anonymous,” “unlinkable,” �
 The release owner and reviewer compare the candidate digest with the evidence package. After explicit approval:
 
 1. create a signed or annotated tag pointing to the reviewed commit;
-2. push the exact branch/tag without rewriting history;
-3. create the GitHub Release from the approved notes;
-4. upload only artifacts whose digests appear in the record;
-5. verify links, downloads, checksums, license files, and warnings from a logged-out browser;
-6. archive the release evidence.
+2. push the exact branch and tag once, without rewriting history;
+3. record the annotated tag-object SHA and peeled commit, then recheck both against the remote ref immediately before publication;
+4. create a draft GitHub Release from the approved notes;
+5. upload only artifacts whose digests appear in the record and verify the complete draft asset set;
+6. publish the draft so GitHub locks the Release assets and tag, then verify the Release reports `immutable`;
+7. verify links, downloads, checksums, license files, warnings, and release attestation from a logged-out browser or unauthenticated client;
+8. archive the release evidence.
 
 Deployment, package-registry publication, notarization, and app-store submission are separate permissioned actions.
 

@@ -320,7 +320,7 @@ function renderSidebar(state: Readonly<WalletState>): string {
 
       <footer class="sidebar-footer">
         <span class="quiet-status"><i></i> Local-first shell</span>
-        <span>Reference implementation · 0.1.0-preview.1</span>
+        <span>Reference implementation · 0.1.0-preview.2</span>
       </footer>
     </aside>
   `;

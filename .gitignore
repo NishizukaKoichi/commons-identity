@@ -2,6 +2,8 @@
 node_modules/
 /apps/wallet/dist/
 /apps/wallet/src-tauri/target/
+# Tauri generates a target-specific capability schema during Linux CI builds.
+/apps/wallet/src-tauri/gen/schemas/linux-schema.json
 /.idea/
 /.vscode/
 .DS_Store

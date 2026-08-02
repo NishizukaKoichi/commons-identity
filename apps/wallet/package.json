@@ -1,6 +1,6 @@
 {
   "name": "@commons-identity/wallet",
-  "version": "0.1.0-preview.1",
+  "version": "0.1.0-preview.2",
   "private": true,
   "description": "Reference macOS wallet shell for Commons Identity Protocol 1.0",
   "type": "module",

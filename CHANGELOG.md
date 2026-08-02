@@ -4,6 +4,19 @@ All notable changes to Commons Identity are documented here. The format follows 
 
 ## [Unreleased]
 
+## [0.1.0-preview.2] - 2026-08-03
+
+### Fixed
+
+- Classified Tauri's Linux target capability schema as a generated build artifact so the immutable release clean-tree gate remains strict without rejecting a successful clean-runner build.
+- Made the release clean-tree gate print every unexpected path before failing, preserving actionable audit evidence.
+- Added the same clean-tree assertion to normal Linux CI so generated-file regressions fail before a version tag is created.
+
+### Release provenance
+
+- Preserved `v0.1.0-preview.1` as an unchanged annotated tag and protected `v*` tags from update or deletion. Its [release workflow](https://github.com/NishizukaKoichi/commons-identity/actions/runs/30753405849) passed all Rust, dependency, and Wallet gates, then stopped at the clean-tree gate before artifact assembly or publication; no distributable `preview.1` assets were published.
+- Enabled GitHub Immutable Releases and changed publication to draft, complete asset upload, remote tag-object/commit revalidation, then immutable publication.
+
 ## [0.1.0-preview.1] - 2026-08-03
 
 ### Added
@@ -43,5 +56,6 @@ All notable changes to Commons Identity are documented here. The format follows 
 - The browser Wallet is a non-secret UX preview; its Tauri shell does not yet connect the Rust Vault to every screen.
 - Linux native Wallet distribution is not supported; only the macOS source target graphs and browser artifact are in the current release boundary.
 
-[Unreleased]: https://github.com/NishizukaKoichi/commons-identity/compare/v0.1.0-preview.1...HEAD
+[Unreleased]: https://github.com/NishizukaKoichi/commons-identity/compare/v0.1.0-preview.2...HEAD
+[0.1.0-preview.2]: https://github.com/NishizukaKoichi/commons-identity/releases/tag/v0.1.0-preview.2
 [0.1.0-preview.1]: https://github.com/NishizukaKoichi/commons-identity/releases/tag/v0.1.0-preview.1

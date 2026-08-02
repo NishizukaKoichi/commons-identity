@@ -129,6 +129,16 @@ jobs:
       - name: Build release profile
         run: cargo build --workspace --all-features --release --locked
 
+      - name: Confirm quality gates did not mutate source
+        run: |
+          git diff --exit-code
+          git diff --cached --exit-code
+          SOURCE_STATUS="$(git status --short)"
+          if [[ -n "${SOURCE_STATUS}" ]]; then
+            printf 'Quality gates left unexpected source-tree changes:\n%s\n' "${SOURCE_STATUS}" >&2
+            exit 1
+          fi
+
   wallet:
     name: Wallet quality gates
     runs-on: ubuntu-latest

@@ -9,7 +9,7 @@ import type {
 export const browserRuntime: RuntimeInfo = {
   mode: "browser-preview",
   protocol: "commons-identity/1",
-  appVersion: "0.1.0-preview.1",
+  appVersion: "0.1.0-preview.2",
   seededData: true,
   secretPersistence: "none",
   coreConnected: false,

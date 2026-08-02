@@ -32,7 +32,7 @@
 
 - What exists today: CI-CoreのRust実装、限定OID4VCI／OID4VP flowを持つloopback専用の一時HTTPサービス、再現可能なCLI demo、架空データだけを扱うWallet UX shell、暗号化migration bundleの検証・stage、プロトコル仕様、ADR、脅威モデル、公開OSS運用文書。
 - What is missing: 永続するAuthority／Issuer／Verifier鍵とservice state、Rust Coreへ接続したnative Wallet、migrationのlive activation、Guardian Recovery、CI-Private-BBS、完全な`did:webvh` resolver／履歴、独立した第三者監査、独立実装との相互運用結果、実ネットワークでの完了証拠、実環境の運用実績、正式な適合認証制度。
-- Latest known status (2026-08-03): `0.1.0-preview.1` Developer Preview。本番利用や互換性の保証はない。具体的な実装可否はテスト結果とCHANGELOGを参照する。
+- Latest known status (2026-08-03): `0.1.0-preview.2` Developer Preview。本番利用や互換性の保証はない。具体的な実装可否はテスト結果とCHANGELOGを参照する。
 
 ## Constraints
 

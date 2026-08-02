@@ -15,7 +15,7 @@ axum.workspace = true
 base64.workspace = true
 chacha20poly1305.workspace = true
 clap.workspace = true
-commons-identity-core = { version = "0.1.0-preview.1", path = "../commons-identity-core" }
+commons-identity-core = { version = "0.1.0-preview.2", path = "../commons-identity-core" }
 http.workspace = true
 hkdf.workspace = true
 multibase.workspace = true

@@ -36,7 +36,7 @@ body:
     attributes:
       label: Version or commit
       description: Tagまたは完全なcommit SHAを記載してください。
-      placeholder: v0.1.0-preview.1 or 0123456789abcdef...
+      placeholder: v0.1.0-preview.2 or 0123456789abcdef...
     validations:
       required: true
 

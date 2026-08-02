@@ -4,11 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing annotated Developer Preview tag (for example v0.1.0-preview.1)"
+        description: "Existing annotated Developer Preview tag (for example v0.1.0-preview.2)"
         required: true
         type: string
       confirmation:
         description: "Type DEVELOPER PREVIEW to confirm an unaudited prerelease"
+        required: true
+        type: string
+      publication_controls_confirmation:
+        description: "After checking release immutability and no tag-rule bypass, type PUBLICATION CONTROLS VERIFIED"
         required: true
         type: string
 
@@ -39,6 +43,7 @@ jobs:
     env:
       RELEASE_TAG: ${{ inputs.tag }}
       RELEASE_CONFIRMATION: ${{ inputs.confirmation }}
+      RELEASE_PUBLICATION_CONTROLS_CONFIRMATION: ${{ inputs.publication_controls_confirmation }}
     steps:
       - name: Check out the requested tag
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -50,6 +55,7 @@ jobs:
       - name: Validate explicit release gate
         run: |
           test "${RELEASE_CONFIRMATION}" = "DEVELOPER PREVIEW"
+          test "${RELEASE_PUBLICATION_CONTROLS_CONFIRMATION}" = "PUBLICATION CONTROLS VERIFIED"
           if [[ ! "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-preview\.[0-9]+$ ]]; then
             echo "Tag must use vMAJOR.MINOR.PATCH-preview.N" >&2
             exit 1
@@ -92,12 +98,35 @@ jobs:
               raise SystemExit("CHANGELOG has no dated section matching the tag")
           PY
 
-      - name: Confirm release does not already exist
+          RELEASE_TAG_OBJECT="$(git rev-parse "${RELEASE_TAG}")"
+          RELEASE_SOURCE_COMMIT="$(git rev-parse "${RELEASE_TAG}^{commit}")"
+          {
+            printf 'RELEASE_TAG_OBJECT=%s\n' "${RELEASE_TAG_OBJECT}"
+            printf 'RELEASE_SOURCE_COMMIT=%s\n' "${RELEASE_SOURCE_COMMIT}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Verify tag controls and release absence
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          RULESET_ID="$(
+            gh api \
+              -H 'X-GitHub-Api-Version: 2026-03-10' \
+              "repos/${GITHUB_REPOSITORY}/rulesets" \
+              | jq -r '[.[] | select(.name == "Immutable version tags" and .target == "tag" and .enforcement == "active")] | if length == 1 then .[0].id else empty end'
+          )"
+          test -n "${RULESET_ID}"
+          gh api \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${GITHUB_REPOSITORY}/rulesets/${RULESET_ID}" \
+            | jq -e '
+                .conditions.ref_name.include == ["refs/tags/v*"]
+                and .conditions.ref_name.exclude == []
+                and ([.rules[].type] | sort) == (["deletion", "update"] | sort)
+              '
+
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
-            echo "Release already exists; release bytes are never replaced." >&2
+            echo "An immutable Release already exists; this workflow never replaces it." >&2
             exit 1
           fi
 
@@ -168,11 +197,15 @@ jobs:
         run: |
           git diff --exit-code
           git diff --cached --exit-code
-          test -z "$(git status --short)"
+          SOURCE_STATUS="$(git status --short)"
+          if [[ -n "${SOURCE_STATUS}" ]]; then
+            printf 'Release gates left unexpected source-tree changes:\n%s\n' "${SOURCE_STATUS}" >&2
+            exit 1
+          fi
 
       - name: Assemble immutable review artifact
         run: |
-          SOURCE_COMMIT=$(git rev-parse HEAD)
+          test "$(git rev-parse HEAD)" = "${RELEASE_SOURCE_COMMIT}"
           ASSET_NAME="commons-wallet-browser-preview-${RELEASE_TAG}"
           mkdir -p "release/${ASSET_NAME}"
           cp -R apps/wallet/dist/. "release/${ASSET_NAME}/"
@@ -199,19 +232,24 @@ jobs:
             'Serve this directory over local HTTP; do not enter real identity data.' \
             'Example: python3 -m http.server --directory . 8080' \
             '' \
-            "Source commit: ${SOURCE_COMMIT}" \
+            "Source commit: ${RELEASE_SOURCE_COMMIT}" \
             > "release/${ASSET_NAME}/README.txt"
           tar -C release -czf "release/${ASSET_NAME}.tar.gz" "${ASSET_NAME}"
           (cd release && sha256sum "${ASSET_NAME}.tar.gz" > SHA256SUMS.txt)
           {
             printf 'Release tag: %s\n' "${RELEASE_TAG}"
-            printf 'Source commit: %s\n' "${SOURCE_COMMIT}"
+            printf 'Annotated tag object: %s\n' "${RELEASE_TAG_OBJECT}"
+            printf 'Source commit: %s\n' "${RELEASE_SOURCE_COMMIT}"
             printf 'Release owner: %s\n' "${GITHUB_REPOSITORY_OWNER}"
-            printf 'Publisher: %s via GitHub Actions\n' "${GITHUB_ACTOR}"
+            printf 'Publisher: GitHub Actions token for %s\n' "${GITHUB_REPOSITORY}"
+            printf 'Original workflow actor: %s\n' "${GITHUB_ACTOR}"
+            printf 'Current attempt triggering actor: %s\n' "${GITHUB_TRIGGERING_ACTOR}"
             printf 'Independent reviewer: not assigned; single-maintainer early Developer Preview\n'
             printf 'Security reviewer: not assigned; automated and pre-publication review only\n'
-            printf 'Publication approval: workflow_dispatch by %s with explicit DEVELOPER PREVIEW confirmation\n' "${GITHUB_TRIGGERING_ACTOR}"
-            printf 'Workflow run: %s/%s/actions/runs/%s\n' "${GITHUB_SERVER_URL}" "${GITHUB_REPOSITORY}" "${GITHUB_RUN_ID}"
+            printf 'Publication approval: workflow_dispatch with explicit DEVELOPER PREVIEW and PUBLICATION CONTROLS VERIFIED confirmations\n'
+            printf 'Workflow run: %s/%s/actions/runs/%s/attempts/%s\n' "${GITHUB_SERVER_URL}" "${GITHUB_REPOSITORY}" "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}"
+            printf 'Workflow ref: %s\n' "${GITHUB_WORKFLOW_REF}"
+            printf 'Workflow SHA: %s\n' "${GITHUB_WORKFLOW_SHA}"
             printf 'Runner: %s/%s\n' "${RUNNER_OS}" "${RUNNER_ARCH}"
             printf 'Runner image: %s %s\n' "${ImageOS:-unknown}" "${ImageVersion:-unknown}"
             rustc --version
@@ -226,29 +264,81 @@ jobs:
 
       - name: Prepare honest release notes
         run: |
-          SOURCE_COMMIT=$(git rev-parse HEAD)
           {
             printf '# Commons Identity %s — Developer Preview\n\n' "${RELEASE_TAG}"
             printf '> **Experimental and unaudited. Not for production identity infrastructure or real-person data.**\n\n'
             # shellcheck disable=SC2016
-            printf 'This prerelease publishes the reviewable Commons Wallet browser UI and source at commit `%s`.\n\n' "${SOURCE_COMMIT}"
+            printf 'This prerelease publishes the reviewable Commons Wallet browser UI and source at commit `%s`.\n\n' "${RELEASE_SOURCE_COMMIT}"
             printf 'The browser artifact contains fictional in-memory data only. It does not create keys, issue credentials, persist a vault, or provide a signed/notarized macOS application.\n\n'
             # shellcheck disable=SC2016
             printf 'Profile boundary: VCDM 2.0 `application/vc` / `application/vp`, `eddsa-jcs-2022`, CI-Core community linkability only. BBS, selective disclosure, verifier-domain pseudonyms, Guardian Recovery conformance, and production interoperability are excluded.\n\n'
             # shellcheck disable=SC2016
-            printf 'Native distribution is excluded. The Linux-only Tauri/GTK source graph contains accepted advisory `GHSA-wrw7-89jp-8q8g`; no Linux artifact is built or published, and both supported macOS target graphs pass the advisory gate. See [`SECURITY.md`](https://github.com/%s/blob/%s/SECURITY.md).\n\n' "${GITHUB_REPOSITORY}" "${SOURCE_COMMIT}"
-            printf 'The release workflow reran format, lint, typecheck, test, and release build gates. Checksums and build evidence are attached. To roll back, stop using this prerelease and return to the prior tag; published bytes are never replaced.\n'
+            printf 'Native distribution is excluded. The Linux-only Tauri/GTK source graph contains accepted advisory `GHSA-wrw7-89jp-8q8g`; no Linux artifact is built or published, and both supported macOS target graphs pass the advisory gate. See [`SECURITY.md`](https://github.com/%s/blob/%s/SECURITY.md).\n\n' "${GITHUB_REPOSITORY}" "${RELEASE_SOURCE_COMMIT}"
+            printf 'The release workflow reran format, lint, typecheck, test, and release build gates. Checksums and build evidence are attached. To roll back, stop using this prerelease; if no earlier reviewed release exists, disable it rather than using a withdrawn candidate. Published bytes are never replaced.\n'
           } > release/RELEASE-NOTES.md
 
-      - name: Publish GitHub prerelease
+      - name: Reconfirm remote tag identity
+        run: |
+          REMOTE_TAG_OBJECT="$(git ls-remote origin "refs/tags/${RELEASE_TAG}" | cut -f1)"
+          REMOTE_SOURCE_COMMIT="$(git ls-remote origin "refs/tags/${RELEASE_TAG}^{}" | cut -f1)"
+          test "${REMOTE_TAG_OBJECT}" = "${RELEASE_TAG_OBJECT}"
+          test "${REMOTE_SOURCE_COMMIT}" = "${RELEASE_SOURCE_COMMIT}"
+
+      - name: Create draft GitHub prerelease
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${RELEASE_TAG}" \
             --verify-tag \
+            --draft \
             --prerelease \
+            --latest=false \
             --title "Commons Identity ${RELEASE_TAG} (Developer Preview)" \
-            --notes-file release/RELEASE-NOTES.md \
+            --notes-file release/RELEASE-NOTES.md
+
+      - name: Upload reviewed assets to draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${RELEASE_TAG}" \
             release/commons-wallet-browser-preview-"${RELEASE_TAG}".tar.gz \
             release/SHA256SUMS.txt \
             release/RELEASE-EVIDENCE.txt
+
+      - name: Verify complete draft asset set
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${RELEASE_TAG}" \
+            --json tagName,isDraft,isPrerelease,assets \
+            | jq -e \
+                --arg tag "${RELEASE_TAG}" \
+                --arg artifact "commons-wallet-browser-preview-${RELEASE_TAG}.tar.gz" \
+                '
+                  .tagName == $tag
+                  and .isDraft == true
+                  and .isPrerelease == true
+                  and ([.assets[].name] | sort) == ([$artifact, "RELEASE-EVIDENCE.txt", "SHA256SUMS.txt"] | sort)
+                  and all(.assets[]; .size > 0)
+                '
+
+      - name: Publish immutable GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          REMOTE_TAG_OBJECT="$(git ls-remote origin "refs/tags/${RELEASE_TAG}" | cut -f1)"
+          REMOTE_SOURCE_COMMIT="$(git ls-remote origin "refs/tags/${RELEASE_TAG}^{}" | cut -f1)"
+          test "${REMOTE_TAG_OBJECT}" = "${RELEASE_TAG_OBJECT}"
+          test "${REMOTE_SOURCE_COMMIT}" = "${RELEASE_SOURCE_COMMIT}"
+
+          gh release edit "${RELEASE_TAG}" \
+            --draft=false \
+            --prerelease \
+            --latest=false
+
+          gh api \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" \
+            | jq -e \
+                --arg tag "${RELEASE_TAG}" \
+                '.tag_name == $tag and .draft == false and .prerelease == true and .immutable == true'
