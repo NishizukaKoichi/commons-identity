@@ -115,6 +115,22 @@ jobs:
           rustup toolchain install 1.88.0 --profile minimal --component clippy,rustfmt
           rustup override set 1.88.0
 
+      - name: Install pinned Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install pinned pnpm
+        run: |
+          npm install --global "corepack@${COREPACK_VERSION}"
+          corepack enable
+          corepack install --global "pnpm@${PNPM_VERSION}"
+
+      - name: Build the locked Tauri frontend in this clean runner
+        run: |
+          pnpm --dir apps/wallet install --frozen-lockfile
+          pnpm --dir apps/wallet build
+
       - name: Run Rust release gates
         run: |
           cargo fetch --locked
@@ -131,17 +147,6 @@ jobs:
           cargo deny check bans
           cargo deny --target aarch64-apple-darwin check advisories
           cargo deny --target x86_64-apple-darwin check advisories
-
-      - name: Install pinned Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Install pinned pnpm
-        run: |
-          npm install --global "corepack@${COREPACK_VERSION}"
-          corepack enable
-          corepack install --global "pnpm@${PNPM_VERSION}"
 
       - name: Run Wallet release gates
         env:

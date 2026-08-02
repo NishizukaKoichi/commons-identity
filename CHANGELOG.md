@@ -27,6 +27,10 @@ All notable changes to Commons Identity are documented here. The format follows 
 - Required five distinct governance keys, exact Authority DID/key verification methods, collision-free persona-device bindings, bounded credential-instance registries, and fail-closed future Status timestamps.
 - Removed the remaining Guardian-configured Vault state and zeroized secret serialization and Operator X25519 key material.
 
+### Fixed
+
+- Made clean Linux CI and release runners build the locked Wallet frontend before compiling the Tauri shell, removing an accidental dependency on a pre-existing local `dist` directory.
+
 ### Known limitations
 
 - No production deployment is supported.

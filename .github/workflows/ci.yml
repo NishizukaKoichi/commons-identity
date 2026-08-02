@@ -98,6 +98,22 @@ jobs:
       - name: Resolve locked dependencies
         run: cargo fetch --locked
 
+      - name: Install pinned Node.js for the Tauri frontend
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install pinned pnpm for the Tauri frontend
+        run: |
+          npm install --global "corepack@${COREPACK_VERSION}"
+          corepack enable
+          corepack install --global "pnpm@${PNPM_VERSION}"
+
+      - name: Build the locked Tauri frontend in this clean runner
+        run: |
+          pnpm --dir apps/wallet install --frozen-lockfile
+          pnpm --dir apps/wallet build
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
