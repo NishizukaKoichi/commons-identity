@@ -20,7 +20,7 @@ homepage = "https://nishizukakoichi.github.io/commons-identity/"
 anyhow = "1.0.100"
 argon2 = "0.5.3"
 axum = "0.8.9"
-base64 = "0.22.1"
+base64 = "0.23.0"
 chacha20poly1305 = "0.10.1"
 ciborium = "0.2.2"
 clap = { version = "4.5.51", features = ["derive", "env"] }
