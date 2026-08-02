@@ -1,0 +1,9 @@
+# Default review owner. Protocol, security, and release changes still require
+# the evidence and independent review described in CONTRIBUTING.md.
+* @NishizukaKoichi
+
+/.github/ @NishizukaKoichi
+/SECURITY.md @NishizukaKoichi
+/deny.toml @NishizukaKoichi
+/docs/contexts/ @NishizukaKoichi
+/docs/specification/ @NishizukaKoichi

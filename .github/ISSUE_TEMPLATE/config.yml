@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 非公開の脆弱性報告 / Private security report
+    url: https://github.com/NishizukaKoichi/commons-identity/security/advisories/new
+    about: 秘密鍵、個人情報、exploit detailsをIssueへ書かず、Private Vulnerability Reportingを使用してください。
+  - name: Security policy
+    url: https://github.com/NishizukaKoichi/commons-identity/blob/main/SECURITY.md
+    about: 対象範囲、safe testing、response targetsを先に確認してください。

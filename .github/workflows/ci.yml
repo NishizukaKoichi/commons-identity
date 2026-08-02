@@ -1,0 +1,224 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+  NODE_VERSION: 22.13.0
+  COREPACK_VERSION: 0.35.0
+  PNPM_VERSION: 10.12.1
+  CARGO_DENY_VERSION: 0.20.2
+  ACTIONLINT_VERSION: 1.7.12
+  ACTIONLINT_LINUX_AMD64_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+
+jobs:
+  repository-integrity:
+    name: Repository integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out reviewed source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Check committed text
+        run: git show --check --format= HEAD
+
+      - name: Validate GitHub Actions syntax
+        run: |
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output actionlint.tar.gz \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          printf '%s  %s\n' "${ACTIONLINT_LINUX_AMD64_SHA256}" actionlint.tar.gz | sha256sum --check
+          tar -xzf actionlint.tar.gz actionlint
+          ./actionlint .github/workflows/*.yml
+
+      - name: Verify immutable Context copies
+        run: |
+          cmp docs/contexts/v1.jsonld apps/wallet/public/contexts/v1.jsonld
+          (cd docs/contexts && sha256sum --check v1.sha256)
+          (cd apps/wallet/public/contexts && sha256sum --check v1.jsonld.sha256)
+
+      - name: Parse machine-readable assets
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          for path in (
+              Path("docs/contexts/v1.jsonld"),
+              Path("apps/wallet/public/contexts/v1.jsonld"),
+              Path("apps/wallet/src-tauri/tauri.conf.json"),
+          ):
+              with path.open(encoding="utf-8") as handle:
+                  json.load(handle)
+              print(f"parsed {path}")
+          PY
+
+  rust:
+    name: Rust quality gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out reviewed source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Install Linux desktop build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends \
+            build-essential \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf
+
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.88.0 --profile minimal --component clippy,rustfmt
+          rustup override set 1.88.0
+
+      - name: Resolve locked dependencies
+        run: cargo fetch --locked
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Lint
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Typecheck
+        run: cargo check --workspace --all-targets --all-features --locked
+
+      - name: Test
+        run: cargo test --workspace --all-features --locked
+
+      - name: Build release profile
+        run: cargo build --workspace --all-features --release --locked
+
+  wallet:
+    name: Wallet quality gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out reviewed source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install pinned pnpm
+        run: |
+          npm install --global "corepack@${COREPACK_VERSION}"
+          corepack enable
+          corepack install --global "pnpm@${PNPM_VERSION}"
+          pnpm --version
+
+      - name: Install locked Wallet dependencies
+        run: pnpm --dir apps/wallet install --frozen-lockfile
+
+      - name: Check formatting
+        run: pnpm --dir apps/wallet format:check
+
+      - name: Lint
+        run: pnpm --dir apps/wallet lint
+
+      - name: Typecheck
+        run: pnpm --dir apps/wallet typecheck
+
+      - name: Test
+        run: pnpm --dir apps/wallet test
+
+      - name: Build browser preview
+        run: pnpm --dir apps/wallet build
+
+      - name: Attach source and dependency notices
+        run: |
+          cp LICENSE NOTICE apps/wallet/dist/
+          mkdir -p apps/wallet/dist/LICENSES/tauri-api
+          cp LICENSES/CC-BY-4.0.md LICENSES/README.md apps/wallet/dist/LICENSES/
+          cp \
+            apps/wallet/node_modules/@tauri-apps/api/LICENSE_APACHE-2.0 \
+            apps/wallet/node_modules/@tauri-apps/api/LICENSE_MIT \
+            apps/wallet/dist/LICENSES/tauri-api/
+          TAURI_API_VERSION=$(node -p "require('./apps/wallet/node_modules/@tauri-apps/api/package.json').version")
+          printf '%s\n' \
+            'Bundled production dependency:' \
+            "@tauri-apps/api ${TAURI_API_VERSION} — Apache-2.0 OR MIT" \
+            'License texts: LICENSES/tauri-api/' \
+            > apps/wallet/dist/THIRD-PARTY-NOTICES.txt
+
+      - name: Upload browser preview for review
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: commons-wallet-browser-preview-${{ github.sha }}
+          path: apps/wallet/dist
+          if-no-files-found: error
+          retention-days: 7
+
+  dependency-policy:
+    name: Dependency and license policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out reviewed source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.88.0 --profile minimal
+          rustup override set 1.88.0
+
+      - name: Install pinned cargo-deny
+        run: cargo install cargo-deny --version "${CARGO_DENY_VERSION}" --locked
+
+      - name: Check Rust licenses and sources
+        run: cargo deny check licenses sources
+
+      - name: Check dependency bans
+        run: cargo deny check bans
+
+      - name: Check advisories for supported macOS targets
+        run: |
+          cargo deny --target aarch64-apple-darwin check advisories
+          cargo deny --target x86_64-apple-darwin check advisories
+
+      - name: Install pinned Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install pinned pnpm
+        run: |
+          npm install --global "corepack@${COREPACK_VERSION}"
+          corepack enable
+          corepack install --global "pnpm@${PNPM_VERSION}"
+
+      - name: Audit production Wallet dependencies
+        run: |
+          pnpm --dir apps/wallet install --frozen-lockfile
+          pnpm --dir apps/wallet audit --prod --audit-level high

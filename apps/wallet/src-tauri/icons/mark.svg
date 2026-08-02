@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title">
+  <title id="title">Commons Identity seal</title>
+  <rect width="1024" height="1024" fill="#eee7d8" />
+  <path d="M512 105 919 512 512 919 105 512Z" fill="none" stroke="#71470b" stroke-width="28" />
+  <path d="M512 180 844 512 512 844 180 512Z" fill="#ead5af" stroke="#c78325" stroke-width="12" />
+  <path d="M512 267 757 512 512 757 267 512Z" fill="#25231f" />
+  <path d="M512 309 715 512 512 715 309 512Z" fill="none" stroke="#c78325" stroke-width="8" />
+  <text
+    x="512"
+    y="565"
+    fill="#eee7d8"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="178"
+    font-weight="700"
+    letter-spacing="-12"
+    text-anchor="middle"
+  >CI</text>
+</svg>

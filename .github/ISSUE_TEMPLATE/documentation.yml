@@ -1,0 +1,44 @@
+name: Documentation improvement
+description: 仕様、runbook、説明、accessibilityの不足を報告する
+title: "[Docs]: "
+body:
+  - type: input
+    id: location
+    attributes:
+      label: Document and section
+      placeholder: docs/specification/commons-identity-1.0.ja.md §18
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is unclear, incorrect, or inaccessible?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed wording or outcome
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of text
+      options:
+        - Normative protocol text
+        - Informative explanation
+        - Runbook / operations
+        - Wallet UX / accessibility
+        - Translation
+    validations:
+      required: true
+
+  - type: textarea
+    id: sources
+    attributes:
+      label: Sources and assurance impact
+      description: 標準の主張は一次資料を示し、Developer Previewの保証範囲が変わるか記載してください。

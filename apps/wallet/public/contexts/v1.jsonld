@@ -1,0 +1,75 @@
+{
+  "@context": {
+    "@protected": true,
+    "ci": "https://nishizukakoichi.github.io/commons-identity/vocab#",
+    "sec": "https://w3id.org/security#",
+    "CommunityMembershipCredential": "ci:CommunityMembershipCredential",
+    "CommunityRoleCredential": "ci:CommunityRoleCredential",
+    "CommunityCapabilityCredential": "ci:CommunityCapabilityCredential",
+    "CommunityQualificationCredential": "ci:CommunityQualificationCredential",
+    "CommunityRelationshipCredential": "ci:CommunityRelationshipCredential",
+    "ContextualStandingCredential": "ci:ContextualStandingCredential",
+    "ContinuityCredential": "ci:ContinuityCredential",
+    "OperatorCredential": "ci:OperatorCredential",
+    "RecognitionCredential": "ci:RecognitionCredential",
+    "CommonsPresentation": "ci:CommonsPresentation",
+    "CIIssuerBinding": "ci:CIIssuerBinding",
+    "BitstringStatusListCredential": "https://www.w3.org/ns/credentials/status#BitstringStatusListCredential",
+    "BitstringStatusList": {
+      "@id": "https://www.w3.org/ns/credentials/status#BitstringStatusList",
+      "@context": {
+        "@protected": true,
+        "id": "@id",
+        "type": "@type",
+        "encodedList": {
+          "@id": "https://www.w3.org/ns/credentials/status#encodedList",
+          "@type": "https://w3id.org/security#multibase"
+        },
+        "statusPurpose": "https://www.w3.org/ns/credentials/status#statusPurpose",
+        "ttl": "https://www.w3.org/ns/credentials/status#ttl"
+      }
+    },
+    "BitstringStatusListEntry": {
+      "@id": "https://www.w3.org/ns/credentials/status#BitstringStatusListEntry",
+      "@context": {
+        "@protected": true,
+        "id": "@id",
+        "type": "@type",
+        "statusListCredential": {
+          "@id": "https://www.w3.org/ns/credentials/status#statusListCredential",
+          "@type": "@id"
+        },
+        "statusListIndex": "https://www.w3.org/ns/credentials/status#statusListIndex",
+        "statusPurpose": "https://www.w3.org/ns/credentials/status#statusPurpose"
+      }
+    },
+    "community": {
+      "@id": "ci:community",
+      "@type": "@id"
+    },
+    "membership": "ci:membership",
+    "role": "ci:role",
+    "scope": {
+      "@id": "ci:scope",
+      "@container": "@set"
+    },
+    "policyHash": "ci:policyHash",
+    "holderBinding": "ci:holderBinding",
+    "publicKeyMultibase": "sec:publicKeyMultibase",
+    "ciRequestHash": "ci:ciRequestHash",
+    "disclosedClaims": {
+      "@id": "ci:disclosedClaims",
+      "@container": "@set"
+    },
+    "verifier": {
+      "@id": "ci:verifier",
+      "@type": "@id"
+    },
+    "credentialIssuer": {
+      "@id": "ci:credentialIssuer",
+      "@type": "@id"
+    },
+    "operatorCredentialHash": "ci:operatorCredentialHash",
+    "protocol": "ci:protocol"
+  }
+}

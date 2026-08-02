@@ -1,0 +1,73 @@
+name: Protocol change proposal
+description: 規範的な変更を、互換性・脅威・移行とともに提案する
+title: "[Protocol]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Wire meaning、Context、Schema、Credential、Presentation、Archive、recovery、trust policyの変更は、コードより先に境界とtest vectorを合意します。Developer Previewでも既存識別子の意味を黙って変更しません。
+
+  - type: input
+    id: sections
+    attributes:
+      label: Affected specification sections and profiles
+      placeholder: Sections 12–13; ci-core-1
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and normative change
+      description: 現状の問題と、MUST／MUST NOTとして変える最小の内容。
+    validations:
+      required: true
+
+  - type: textarea
+    id: standards
+    attributes:
+      label: Primary standards sources
+      description: 版、日付、該当節を一次資料へのlink付きで記載してください。
+    validations:
+      required: true
+
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Security, privacy, and abuse analysis
+      description: correlation、holder binding、replay、downgrade、stale state、malformed input、運営主体の悪用を含めてください。
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: 少なくとも一つの代替案と不採用理由。
+    validations:
+      required: true
+
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility, migration, and rollback
+      description: 新しいprofile/versionが必要か、既存データをどう扱い、どう戻すか。
+    validations:
+      required: true
+
+  - type: textarea
+    id: vectors
+    attributes:
+      label: Proposed positive and negative test vectors
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Assurance boundary
+      options:
+        - label: 「production-ready」「secure」「anonymous」「audited」など、根拠のない保証を追加しません。
+          required: true
+        - label: BBS、Guardian Recovery、Digital Credentials APIをCI-Coreの達成済み要件として扱いません。
+          required: true

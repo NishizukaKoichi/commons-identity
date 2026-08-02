@@ -1,0 +1,243 @@
+name: Developer Preview release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing annotated Developer Preview tag (for example v0.1.0-preview.1)"
+        required: true
+        type: string
+      confirmation:
+        description: "Type DEVELOPER PREVIEW to confirm an unaudited prerelease"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+  NODE_VERSION: 22.13.0
+  COREPACK_VERSION: 0.35.0
+  PNPM_VERSION: 10.12.1
+  CARGO_DENY_VERSION: 0.20.2
+
+jobs:
+  publish:
+    name: Verify and publish prerelease
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    environment:
+      name: release
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      RELEASE_CONFIRMATION: ${{ inputs.confirmation }}
+    steps:
+      - name: Check out the requested tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs.tag }}
+
+      - name: Validate explicit release gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "${RELEASE_CONFIRMATION}" = "DEVELOPER PREVIEW"
+          if [[ ! "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-preview\.[0-9]+$ ]]; then
+            echo "Tag must use vMAJOR.MINOR.PATCH-preview.N" >&2
+            exit 1
+          fi
+          RELEASE_VERSION="${RELEASE_TAG#v}"
+          python3 - "${RELEASE_VERSION}" <<'PY'
+          import json
+          import re
+          import sys
+          import tomllib
+          from pathlib import Path
+
+          expected = sys.argv[1]
+          cargo = tomllib.loads(Path("Cargo.toml").read_text(encoding="utf-8"))
+          package = json.loads(Path("apps/wallet/package.json").read_text(encoding="utf-8"))
+          tauri = json.loads(
+              Path("apps/wallet/src-tauri/tauri.conf.json").read_text(encoding="utf-8")
+          )
+          versions = {
+              "Cargo workspace": cargo["workspace"]["package"]["version"],
+              "Wallet package": package["version"],
+              "Tauri application": tauri["version"],
+          }
+          for label, actual in versions.items():
+              if actual != expected:
+                  raise SystemExit(f"{label} version {actual!r} does not match tag {expected!r}")
+
+          data = Path("apps/wallet/src/data.ts").read_text(encoding="utf-8")
+          app = Path("apps/wallet/src/app.ts").read_text(encoding="utf-8")
+          changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+          if not re.search(rf'appVersion:\s*"{re.escape(expected)}"', data):
+              raise SystemExit("Wallet runtime version does not match the tag")
+          if f"Reference implementation · {expected}" not in app:
+              raise SystemExit("Wallet visible version does not match the tag")
+          if not re.search(rf"^## \[{re.escape(expected)}\] - \d{{4}}-\d{{2}}-\d{{2}}$", changelog, re.M):
+              raise SystemExit("CHANGELOG has no dated section matching the tag")
+          PY
+          git show-ref --verify --quiet "refs/tags/${RELEASE_TAG}"
+          test "$(git cat-file -t "${RELEASE_TAG}")" = "tag"
+          test -z "$(git status --short)"
+          gh release view "${RELEASE_TAG}" >/dev/null 2>&1 && {
+            echo "Release already exists; release bytes are never replaced." >&2
+            exit 1
+          }
+          true
+
+      - name: Install Linux desktop build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends \
+            build-essential \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf
+
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.88.0 --profile minimal --component clippy,rustfmt
+          rustup override set 1.88.0
+
+      - name: Run Rust release gates
+        run: |
+          cargo fetch --locked
+          cargo fmt --all -- --check
+          cargo clippy --workspace --all-targets --all-features -- -D warnings
+          cargo check --workspace --all-targets --all-features --locked
+          cargo test --workspace --all-features --locked
+          cargo build --workspace --all-features --release --locked
+
+      - name: Check Rust dependency policy
+        run: |
+          cargo install cargo-deny --version "${CARGO_DENY_VERSION}" --locked
+          cargo deny check licenses sources
+          cargo deny check bans
+          cargo deny --target aarch64-apple-darwin check advisories
+          cargo deny --target x86_64-apple-darwin check advisories
+
+      - name: Install pinned Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install pinned pnpm
+        run: |
+          npm install --global "corepack@${COREPACK_VERSION}"
+          corepack enable
+          corepack install --global "pnpm@${PNPM_VERSION}"
+
+      - name: Run Wallet release gates
+        env:
+          BASE_PATH: ./
+        run: |
+          pnpm --dir apps/wallet install --frozen-lockfile
+          pnpm --dir apps/wallet format:check
+          pnpm --dir apps/wallet lint
+          pnpm --dir apps/wallet typecheck
+          pnpm --dir apps/wallet test
+          pnpm --dir apps/wallet build
+          pnpm --dir apps/wallet audit --prod --audit-level high
+          cmp docs/contexts/v1.jsonld apps/wallet/dist/contexts/v1.jsonld
+
+      - name: Confirm release gates did not mutate source
+        run: |
+          git diff --exit-code
+          git diff --cached --exit-code
+          test -z "$(git status --short)"
+
+      - name: Assemble immutable review artifact
+        run: |
+          SOURCE_COMMIT=$(git rev-parse HEAD)
+          ASSET_NAME="commons-wallet-browser-preview-${RELEASE_TAG}"
+          mkdir -p "release/${ASSET_NAME}"
+          cp -R apps/wallet/dist/. "release/${ASSET_NAME}/"
+          cp LICENSE NOTICE "release/${ASSET_NAME}/"
+          mkdir -p "release/${ASSET_NAME}/LICENSES"
+          cp LICENSES/CC-BY-4.0.md LICENSES/README.md "release/${ASSET_NAME}/LICENSES/"
+          mkdir -p "release/${ASSET_NAME}/LICENSES/tauri-api"
+          cp \
+            apps/wallet/node_modules/@tauri-apps/api/LICENSE_APACHE-2.0 \
+            apps/wallet/node_modules/@tauri-apps/api/LICENSE_MIT \
+            "release/${ASSET_NAME}/LICENSES/tauri-api/"
+          TAURI_API_VERSION=$(node -p "require('./apps/wallet/node_modules/@tauri-apps/api/package.json').version")
+          printf '%s\n' \
+            'Bundled production dependency:' \
+            "@tauri-apps/api ${TAURI_API_VERSION} — Apache-2.0 OR MIT" \
+            'License texts: LICENSES/tauri-api/' \
+            > "release/${ASSET_NAME}/THIRD-PARTY-NOTICES.txt"
+          printf '%s\n' \
+            'Commons Wallet browser UI — Developer Preview' \
+            '' \
+            'Experimental and unaudited. Uses fictional data, creates no identity keys,' \
+            'and is not production identity infrastructure.' \
+            '' \
+            'Serve this directory over local HTTP; do not enter real identity data.' \
+            'Example: python3 -m http.server --directory . 8080' \
+            '' \
+            "Source commit: ${SOURCE_COMMIT}" \
+            > "release/${ASSET_NAME}/README.txt"
+          tar -C release -czf "release/${ASSET_NAME}.tar.gz" "${ASSET_NAME}"
+          (cd release && sha256sum "${ASSET_NAME}.tar.gz" > SHA256SUMS.txt)
+          {
+            printf 'Release tag: %s\n' "${RELEASE_TAG}"
+            printf 'Source commit: %s\n' "${SOURCE_COMMIT}"
+            printf 'Release owner: %s\n' "${GITHUB_REPOSITORY_OWNER}"
+            printf 'Publisher: %s via GitHub Actions\n' "${GITHUB_ACTOR}"
+            printf 'Independent reviewer: not assigned; single-maintainer early Developer Preview\n'
+            printf 'Security reviewer: not assigned; automated and pre-publication review only\n'
+            printf 'Publication approval: workflow_dispatch by %s with explicit DEVELOPER PREVIEW confirmation\n' "${GITHUB_TRIGGERING_ACTOR}"
+            printf 'Workflow run: %s/%s/actions/runs/%s\n' "${GITHUB_SERVER_URL}" "${GITHUB_REPOSITORY}" "${GITHUB_RUN_ID}"
+            printf 'Runner: %s/%s\n' "${RUNNER_OS}" "${RUNNER_ARCH}"
+            printf 'Runner image: %s %s\n' "${ImageOS:-unknown}" "${ImageVersion:-unknown}"
+            rustc --version
+            cargo --version
+            node --version
+            pnpm --version
+            printf 'Profile: ci-core-1 Developer Preview\n'
+            printf 'Independent audit: not completed\n'
+            printf 'Independent implementation interoperability: not completed\n'
+          } > release/RELEASE-EVIDENCE.txt
+
+      - name: Prepare honest release notes
+        run: |
+          SOURCE_COMMIT=$(git rev-parse HEAD)
+          {
+            printf '# Commons Identity %s — Developer Preview\n\n' "${RELEASE_TAG}"
+            printf '> **Experimental and unaudited. Not for production identity infrastructure or real-person data.**\n\n'
+            # shellcheck disable=SC2016
+            printf 'This prerelease publishes the reviewable Commons Wallet browser UI and source at commit `%s`.\n\n' "${SOURCE_COMMIT}"
+            printf 'The browser artifact contains fictional in-memory data only. It does not create keys, issue credentials, persist a vault, or provide a signed/notarized macOS application.\n\n'
+            # shellcheck disable=SC2016
+            printf 'Profile boundary: VCDM 2.0 `application/vc` / `application/vp`, `eddsa-jcs-2022`, CI-Core community linkability only. BBS, selective disclosure, verifier-domain pseudonyms, Guardian Recovery conformance, and production interoperability are excluded.\n\n'
+            printf 'The release workflow reran format, lint, typecheck, test, and release build gates. Checksums and build evidence are attached. To roll back, stop using this prerelease and return to the prior tag; published bytes are never replaced.\n'
+          } > release/RELEASE-NOTES.md
+
+      - name: Publish GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${RELEASE_TAG}" \
+            --verify-tag \
+            --prerelease \
+            --title "Commons Identity ${RELEASE_TAG} (Developer Preview)" \
+            --notes-file release/RELEASE-NOTES.md \
+            release/commons-wallet-browser-preview-"${RELEASE_TAG}".tar.gz \
+            release/SHA256SUMS.txt \
+            release/RELEASE-EVIDENCE.txt

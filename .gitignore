@@ -1,0 +1,16 @@
+/target/
+node_modules/
+/apps/wallet/dist/
+/apps/wallet/src-tauri/target/
+/.idea/
+/.vscode/
+.DS_Store
+*.log
+*.sqlite
+*.sqlite3
+*.cia
+*.recovery-kit
+/.env
+/.env.*
+!/.env.example
+/artifacts/

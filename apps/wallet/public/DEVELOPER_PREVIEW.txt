@@ -1,0 +1,6 @@
+Commons Wallet browser preview
+
+Experimental and unaudited. This preview uses fictional in-memory data only,
+creates no identity keys, sends no presentation, and persists no Identity Vault.
+It is not production identity infrastructure and must not receive real identity
+data, private keys, Recovery Kits, or credentials.

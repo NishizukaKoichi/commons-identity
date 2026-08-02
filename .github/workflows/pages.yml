@@ -1,0 +1,134 @@
+name: GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/pages.yml"
+      - "apps/wallet/**"
+      - "docs/contexts/**"
+      - "LICENSE"
+      - "LICENSES/**"
+      - "NOTICE"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: 22.13.0
+  COREPACK_VERSION: 0.35.0
+  PNPM_VERSION: 10.12.1
+
+jobs:
+  build:
+    name: Build auditable browser preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - name: Check out reviewed source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+
+      - name: Install pinned Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install pinned pnpm
+        run: |
+          npm install --global "corepack@${COREPACK_VERSION}"
+          corepack enable
+          corepack install --global "pnpm@${PNPM_VERSION}"
+
+      - name: Install locked Wallet dependencies
+        run: pnpm --dir apps/wallet install --frozen-lockfile
+
+      - name: Verify immutable Context source
+        run: |
+          cmp docs/contexts/v1.jsonld apps/wallet/public/contexts/v1.jsonld
+          (cd docs/contexts && sha256sum --check v1.sha256)
+
+      - name: Run Wallet publication gates
+        run: |
+          pnpm --dir apps/wallet format:check
+          pnpm --dir apps/wallet lint
+          pnpm --dir apps/wallet test
+          pnpm --dir apps/wallet audit --prod --audit-level high
+
+      - name: Build non-secret Developer Preview
+        env:
+          BASE_PATH: /commons-identity/
+        run: pnpm --dir apps/wallet build
+
+      - name: Add deployment provenance
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+          SOURCE_REPOSITORY: ${{ github.repository }}
+          SOURCE_RUN_ID: ${{ github.run_id }}
+        run: |
+          touch apps/wallet/dist/.nojekyll
+          cp LICENSE NOTICE apps/wallet/dist/
+          mkdir -p apps/wallet/dist/LICENSES/tauri-api
+          cp LICENSES/CC-BY-4.0.md LICENSES/README.md apps/wallet/dist/LICENSES/
+          cp \
+            apps/wallet/node_modules/@tauri-apps/api/LICENSE_APACHE-2.0 \
+            apps/wallet/node_modules/@tauri-apps/api/LICENSE_MIT \
+            apps/wallet/dist/LICENSES/tauri-api/
+          TAURI_API_VERSION=$(node -p "require('./apps/wallet/node_modules/@tauri-apps/api/package.json').version")
+          printf '%s\n' \
+            'Bundled production dependency:' \
+            "@tauri-apps/api ${TAURI_API_VERSION} — Apache-2.0 OR MIT" \
+            'License texts: LICENSES/tauri-api/' \
+            > apps/wallet/dist/THIRD-PARTY-NOTICES.txt
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          provenance = {
+              "assurance": "Developer Preview; experimental and unaudited",
+              "profile": "ci-core-1",
+              "repository": os.environ["SOURCE_REPOSITORY"],
+              "commit": os.environ["SOURCE_COMMIT"],
+              "workflowRun": os.environ["SOURCE_RUN_ID"],
+          }
+          Path("apps/wallet/dist/build-info.json").write_text(
+              json.dumps(provenance, indent=2) + "\n", encoding="utf-8"
+          )
+          PY
+          cmp docs/contexts/v1.jsonld apps/wallet/dist/contexts/v1.jsonld
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
+        with:
+          path: apps/wallet/dist
+
+  deploy:
+    name: Deploy reviewed artifact
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy GitHub Pages artifact
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

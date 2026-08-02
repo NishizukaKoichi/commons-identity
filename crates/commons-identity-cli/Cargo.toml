@@ -1,0 +1,24 @@
+[package]
+name = "commons-identity-cli"
+description = "Commons Identity reference wallet and conformance CLI"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+commons-identity-core = { version = "0.1.0-preview.1", path = "../commons-identity-core" }
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+time.workspace = true
+zeroize.workspace = true
+
+[[bin]]
+name = "commons-identity"
+path = "src/main.rs"
