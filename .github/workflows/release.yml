@@ -48,14 +48,16 @@ jobs:
           ref: ${{ inputs.tag }}
 
       - name: Validate explicit release gate
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           test "${RELEASE_CONFIRMATION}" = "DEVELOPER PREVIEW"
           if [[ ! "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-preview\.[0-9]+$ ]]; then
             echo "Tag must use vMAJOR.MINOR.PATCH-preview.N" >&2
             exit 1
           fi
+          git show-ref --verify --quiet "refs/tags/${RELEASE_TAG}"
+          test "$(git cat-file -t "${RELEASE_TAG}")" = "tag"
+          test "$(git rev-parse "${RELEASE_TAG}^{commit}")" = "$(git rev-parse HEAD)"
+          test -z "$(git status --short)"
           RELEASE_VERSION="${RELEASE_TAG#v}"
           python3 - "${RELEASE_VERSION}" <<'PY'
           import json
@@ -89,14 +91,15 @@ jobs:
           if not re.search(rf"^## \[{re.escape(expected)}\] - \d{{4}}-\d{{2}}-\d{{2}}$", changelog, re.M):
               raise SystemExit("CHANGELOG has no dated section matching the tag")
           PY
-          git show-ref --verify --quiet "refs/tags/${RELEASE_TAG}"
-          test "$(git cat-file -t "${RELEASE_TAG}")" = "tag"
-          test -z "$(git status --short)"
-          gh release view "${RELEASE_TAG}" >/dev/null 2>&1 && {
+
+      - name: Confirm release does not already exist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
             echo "Release already exists; release bytes are never replaced." >&2
             exit 1
-          }
-          true
+          fi
 
       - name: Install Linux desktop build prerequisites
         run: |
