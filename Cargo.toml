@@ -24,7 +24,7 @@ base64 = "0.22.1"
 chacha20poly1305 = "0.10.1"
 ciborium = "0.2.2"
 clap = { version = "4.5.51", features = ["derive", "env"] }
-ed25519-dalek = { version = "2.2.0", features = ["rand_core", "zeroize"] }
+ed25519-dalek = { version = "3.0.0", features = ["rand_core", "zeroize"] }
 flate2 = "1.1.5"
 hex = "0.4.3"
 hmac = "0.12.1"
