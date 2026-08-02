@@ -30,6 +30,7 @@ All notable changes to Commons Identity are documented here. The format follows 
 ### Fixed
 
 - Made clean Linux CI and release runners build the locked Wallet frontend before compiling the Tauri shell, removing an accidental dependency on a pre-existing local `dist` directory.
+- Limited routine Dependabot version updates to reviewed minor and patch changes while keeping repository security updates enabled; breaking major upgrades remain explicit maintenance work.
 
 ### Known limitations
 
